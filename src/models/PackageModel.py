@@ -20,7 +20,7 @@ class InputDetections(Input):
     type: str = "object"
 
     class Config:
-        title = "Person Detections"
+        title = "Detections"
 
 
 class InputDistances(Input):
@@ -29,7 +29,7 @@ class InputDistances(Input):
     type: str = "object"
 
     class Config:
-        title = "Pairwise Distances"
+        title = "Distances"
 
 
 class OptionAnyPair(Config):
