@@ -31,6 +31,23 @@ class InputDistances(Input):
     class Config:
         title = "Distances"
 
+class OutputGroups(Output):
+    name: Literal["outputGroups"] = "outputGroups"
+    value: Union[dict, list]
+    type: str = "object"
+
+    class Config:
+        title = "Social Groups"
+
+
+class OutputStats(Output):
+    name: Literal["outputStats"] = "outputStats"
+    value: Union[dict, list]
+    type: str = "object"
+
+    class Config:
+        title = "Composition Stats"
+
 
 class OptionAnyPair(Config):
     name: Literal["anyPair"] = "anyPair"
@@ -231,22 +248,6 @@ class ConfigRelationTypes(Config):
         json_schema_extra = {"shortDescription": "Which group types to detect"}
 
 
-class OutputGroups(Output):
-    name: Literal["outputGroups"] = "outputGroups"
-    value: Union[dict, list]
-    type: str = "object"
-
-    class Config:
-        title = "Social Groups"
-
-
-class OutputStats(Output):
-    name: Literal["outputStats"] = "outputStats"
-    value: Union[dict, list]
-    type: str = "object"
-
-    class Config:
-        title = "Composition Stats"
 
 
 class SocialGroupInputs(Inputs):
