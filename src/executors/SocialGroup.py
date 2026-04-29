@@ -1,21 +1,14 @@
-"""
-SocialGroup executor classifies person clusters into social relation types.
-"""
 import os
 import sys
 import time
-import uuid
-from itertools import combinations
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../"))
 
 from sdks.novavision.src.base.component import Component
 from sdks.novavision.src.helper.executor import Executor
-from components.Proximity.src.classes.StateManager import StateManager
-from components.Proximity.src.classes.EventAccumulator import EventAccumulator
-from components.Proximity.src.classes.GroupClassifier import GroupClassifier
-from components.Proximity.src.models.PackageModel import PackageModel
-from components.Proximity.src.utils.response import build_response_social_group
+from components.Proximity.src.utils.response import build_response
+from components.Proximity.src.utils.classifier import Classifier
+from components.Proximity.src.models.PackageModel import PackageModel, Detection, BoundingBox
 
 
 class SocialGroup(Component):
@@ -23,358 +16,251 @@ class SocialGroup(Component):
         super().__init__(request, bootstrap)
         self.request.model = PackageModel(**(self.request.data))
 
-        self.group_distance_m = self.request.get_param("ConfigGroupDistance")
-        self.cohesion_window_s = self.request.get_param("ConfigCohesionWindow")
-        self.trajectory_weight = self.request.get_param("ConfigTrajectoryWeight")
-        self.family_age_gap = self.request.get_param("ConfigFamilyAgeGap")
-        self.couple_mode = self.request.get_param("ConfigCoupleMode")
-        self.min_friend_group_size = self.request.get_param("ConfigMinFriendGroupSize")
-        self.confidence_threshold = self.request.get_param("ConfigConfidenceThreshold")
-        self.relation_types_enabled = self.request.get_param("ConfigRelationTypes")
+        self.distances = self.request.get_param("inputDistances") or []
+        self.persons   = self.request.get_param("inputPersons")   or []
+        try:
+            self.facial = self.request.get_param("inputFacialAnalysis") or []
+        except Exception:
+            self.facial = []
 
-        self.input_detections = self.request.get_param("inputDetections")
-        self.input_distances = self.request.get_param("inputDistances")
+        # General
+        self.prox_cm  = self.request.get_param("configProximityThresholdCm") or 150.0
+        self.prox_dur = self.request.get_param("configProximityDurationSec") or 3.0
 
-        self.tracking_history = self.bootstrap.get("tracking_history", {})
-        self.pair_durations = self.bootstrap.get("pair_durations", {})
-        self.active_groups = self.bootstrap.get("active_groups", {})
-        self.frame_count = self.bootstrap.get("frame_count", 0)
-        self.last_timestamp_ms = self.bootstrap.get("last_timestamp_ms", 0)
+        # Classification flags
+        self.family_enabled = self.request.get_param("configFamilyDetection")       == "enabled"
+        self.pc_enabled     = self.request.get_param("configParentChildDetection")   == "enabled"
+        self.couple_enabled = self.request.get_param("configCoupleDetection")        == "enabled"
+        self.fg_enabled     = self.request.get_param("configFriendGroupDetection")   == "enabled"
 
-        self.groups_output = []
-        self.stats_output = {}
+        # Family
+        self.family_min_children = self.request.get_param("configFamilyMinChildren") or 1
+        self.family_min_adults   = self.request.get_param("configFamilyMinAdults")   or 2
+        self.family_gender       = self.request.get_param("configFamilyAdultGender") or "both"
+        self.family_child_age    = self.request.get_param("configFamilyChildAge")    or 18
+        self.family_hr_enabled   = self.request.get_param("configFamilyHeightRatio") == "enabled"
+        self.family_hr_value     = self.request.get_param("configFamilyHRValue")     or 1.4
 
-        self.state_manager = StateManager(self.tracking_history, self.pair_durations)
-        self.event_accumulator = EventAccumulator()
-        self.classifier = GroupClassifier(
-            family_age_gap=float(self.family_age_gap),
-            couple_mode=self._resolve_option_value(self.couple_mode),
-            min_friend_group_size=int(self.min_friend_group_size),
-        )
+        # Parent-Child
+        self.pc_child_age  = self.request.get_param("configPCChildAge")   or 18
+        self.pc_hr_enabled = self.request.get_param("configPCHeightRatio") == "enabled"
+        self.pc_hr_value   = self.request.get_param("configPCHRValue")    or 1.4
+
+        # Couple
+        self.couple_min_dur  = self.request.get_param("configCoupleMinDuration") or 10.0
+        self.couple_formation = self.request.get_param("configCoupleFormation") or "not_required"
+        self.couple_gender   = self.request.get_param("configCoupleGender")     or "any"
+
+        # Friend Group
+        self.fg_min_size       = self.request.get_param("configFGMinSize")          or 2
+        self.fg_height_tol     = self.request.get_param("configFGHeightTolerance")  or 1.3
+        self.fg_child_tolerance = self.request.get_param("configFGChildTolerance") or "allow"
+        self.fg_child_age      = self.request.get_param("configFGChildAge")         or 18
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
-        del config
         return {
-            "tracking_history": {},
-            "pair_durations": {},
-            "active_groups": {},
-            "frame_count": 0,
-            "last_timestamp_ms": 0,
+            "pair_durations": {},  # {(key1, key2): float seconds}
+            "last_time": None,
         }
 
-    @staticmethod
-    def _resolve_option_value(option):
-        if hasattr(option, "value"):
-            return option.value
-        if isinstance(option, dict):
-            return option.get("value")
-        return option
+    # ─────────────────────────────────────────────────────────
+    # Person registry helpers
+    # ─────────────────────────────────────────────────────────
 
-    def _normalize_as_list(self, value):
-        if value is None:
-            return []
-        return value if isinstance(value, list) else [value]
+    def _person_key(self, det):
+        tid = det.get("trackerID")
+        if tid is not None:
+            return f"tid_{int(tid)}"
+        bb = det.get("boundingBox") or {}
+        cx = int(bb.get("left", 0) + bb.get("width",  0) / 2)
+        cy = int(bb.get("top",  0) + bb.get("height", 0) / 2)
+        return f"cx_{cx}_{cy}"
 
-    def _parse_detections(self):
-        persons = []
-        for det in self._normalize_as_list(self.input_detections):
-            d = det if isinstance(det, dict) else det.dict()
-            if str(d.get("classLabel", "")).lower() != "person":
+    def _build_persons_dict(self):
+        """Deduplicate outputObjects by person key → profile dict."""
+        persons = {}
+        for det in self.persons:
+            bb = det.get("boundingBox") or {}
+            if not bb:
                 continue
-            person_id = d.get("tracking_id", d.get("classId"))
-            if person_id is None:
-                continue
-            persons.append(
-                {
-                    "id": str(person_id),
-                    "bbox": d.get("boundingBox") or {},
-                    "timestamp_ms": int(d.get("timestamp_ms", 0)),
-                    "demographics": {
-                        "age_group": d.get("age_group"),
-                        "age_estimate": d.get("age_estimate"),
-                        "gender_estimate": d.get("gender_estimate"),
-                        "demo_confidence": float(d.get("demo_confidence", 0.0)),
-                    },
-                    "trajectory": {
-                        "velocity_mps": float(d.get("velocity_mps", 0.0)),
-                        "heading_deg": float(d.get("heading_deg", 0.0)),
-                    },
-                    "zone_id": d.get("zone_id"),
+            cx  = round(bb.get("left", 0) + bb.get("width",  0) / 2)
+            cy  = round(bb.get("top",  0) + bb.get("height", 0) / 2)
+            key = self._person_key(det)
+            if key not in persons:
+                persons[key] = {
+                    "key":        key,
+                    "bbox":       bb,
+                    "h":          bb.get("height", 1),
+                    "cx":         cx,
+                    "cy":         cy,
+                    "trackerID":  det.get("trackerID"),
+                    "confidence": det.get("confidence", 0.0),
+                    "age":        None,
+                    "gender":     None,
+                    "height_ratio_to_max": 1.0,
                 }
-            )
         return persons
 
-    def _parse_distances(self):
-        dist_map = {}
-        for entry in self._normalize_as_list(self.input_distances):
-            d = entry if isinstance(entry, dict) else entry.dict()
-
-            id_a = d.get("source_id_a") or d.get("objectIdA")
-            id_b = d.get("source_id_b") or d.get("objectIdB")
-            distance_cm = d.get("distanceCm", d.get("distance_cm", 0))
-
-            if id_a is None or id_b is None:
-                pair_ids = d.get("pair_ids")
-                if isinstance(pair_ids, (list, tuple)) and len(pair_ids) == 2:
-                    id_a, id_b = pair_ids[0], pair_ids[1]
-
-            if id_a is None or id_b is None:
+    def _enrich_with_facial(self, persons):
+        """Overlay age/gender from FacialAnalysis; compute height_ratio_to_max."""
+        facial_lookup = {}
+        for det in self.facial:
+            bb = det.get("boundingBox") or {}
+            if not bb:
                 continue
+            cx = round(bb.get("left", 0) + bb.get("width",  0) / 2)
+            cy = round(bb.get("top",  0) + bb.get("height", 0) / 2)
+            facial_lookup[(cx, cy)] = det
 
-            distance_m = float(distance_cm) / 100.0 if float(distance_cm) > 0 else 0.0
-            if distance_m <= 0:
+        heights = [p["h"] for p in persons.values() if p["h"] > 0]
+        max_h   = max(heights) if heights else 1
+
+        for p in persons.values():
+            face = facial_lookup.get((p["cx"], p["cy"]))
+            if face:
+                p["age"]    = face.get("age")
+                p["gender"] = face.get("gender")
+            p["height_ratio_to_max"] = max_h / p["h"] if p["h"] > 0 else 1.0
+
+    # ─────────────────────────────────────────────────────────
+    # Proximity pair helpers
+    # ─────────────────────────────────────────────────────────
+
+    def _find_person_key(self, persons, cx, cy, tol=5):
+        """Match a keyPoint coordinate to a person key within tolerance."""
+        for key, p in persons.items():
+            if abs(p["cx"] - cx) <= tol and abs(p["cy"] - cy) <= tol:
+                return key
+        return None
+
+    def _find_proximate_pairs(self, persons):
+        """Return set of sorted (key1, key2) pairs where distanceCm < threshold."""
+        pairs = set()
+        for det in self.distances:
+            kps     = det.get("keyPoints") or []
+            dist_cm = det.get("distanceCm")
+            if len(kps) < 2 or dist_cm is None or dist_cm > self.prox_cm:
                 continue
-            key = tuple(sorted([str(id_a), str(id_b)]))
-            dist_map[key] = distance_m
+            k1 = self._find_person_key(persons, round(kps[0]["cx"]), round(kps[0]["cy"]))
+            k2 = self._find_person_key(persons, round(kps[1]["cx"]), round(kps[1]["cy"]))
+            if k1 and k2 and k1 != k2:
+                pairs.add(tuple(sorted([k1, k2])))
+        return pairs
 
-        return dist_map
+    def _update_durations(self, current_pairs, dt):
+        """Increment duration for active pairs; remove pairs no longer seen."""
+        durs = self.bootstrap["pair_durations"]
+        for pair in current_pairs:
+            durs[pair] = durs.get(pair, 0.0) + dt
+        for pair in list(durs):
+            if pair not in current_pairs:
+                del durs[pair]
+        self.bootstrap["pair_durations"] = durs
 
-    def _cluster_by_distance(self, persons, dist_map):
-        if not persons:
-            return []
+    # ─────────────────────────────────────────────────────────
+    # Union-Find grouping
+    # ─────────────────────────────────────────────────────────
 
-        parent = {p["id"]: p["id"] for p in persons}
+    def _build_groups(self, active_pairs, persons):
+        """Connected components from active proximity pairs."""
+        parent = {k: k for k in persons}
 
-        def find(node):
-            while parent[node] != node:
-                parent[node] = parent[parent[node]]
-                node = parent[node]
-            return node
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
 
         def union(a, b):
-            root_a, root_b = find(a), find(b)
-            if root_a != root_b:
-                parent[root_a] = root_b
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
 
-        ids = [p["id"] for p in persons]
-        for idx_a, idx_b in combinations(range(len(ids)), 2):
-            key = tuple(sorted([ids[idx_a], ids[idx_b]]))
-            if key in dist_map and dist_map[key] <= self.group_distance_m:
-                union(ids[idx_a], ids[idx_b])
+        for k1, k2 in active_pairs:
+            if k1 in parent and k2 in parent:
+                union(k1, k2)
 
-        clusters = {}
-        for person in persons:
-            root = find(person["id"])
-            clusters.setdefault(root, []).append(person)
-        return [members for members in clusters.values() if len(members) >= 2]
+        groups = {}
+        for k in persons:
+            root = find(k)
+            groups.setdefault(root, []).append(k)
 
-    def _score_cohesion(self, clusters, dist_map):
-        scored = []
-        for members in clusters:
-            pair_distances = []
-            for idx_a, idx_b in combinations(range(len(members)), 2):
-                key = tuple(sorted([members[idx_a]["id"], members[idx_b]["id"]]))
-                if key in dist_map:
-                    pair_distances.append(dist_map[key])
+        return list(groups.values())
 
-            if pair_distances:
-                avg_distance = sum(pair_distances) / len(pair_distances)
-                distance_score = max(0.0, 1.0 - (avg_distance / max(self.group_distance_m, 1e-6)))
-            else:
-                avg_distance = self.group_distance_m
-                distance_score = 0.0
+    # ─────────────────────────────────────────────────────────
+    # Output helpers
+    # ─────────────────────────────────────────────────────────
 
-            headings = [float(m["trajectory"].get("heading_deg", 0.0)) for m in members]
-            heading_spread = (max(headings) - min(headings)) if headings else 180.0
-            heading_spread = min(heading_spread, 360.0 - heading_spread) if heading_spread > 180.0 else heading_spread
-            trajectory_score = max(0.0, 1.0 - (heading_spread / 180.0))
-            cohesion_score = ((1.0 - self.trajectory_weight) * distance_score) + (self.trajectory_weight * trajectory_score)
+    def _pair_durations_for_group(self, member_keys):
+        durs = self.bootstrap["pair_durations"]
+        result = {}
+        keys = list(member_keys)
+        for i, k1 in enumerate(keys):
+            for k2 in keys[i + 1:]:
+                pair = tuple(sorted([k1, k2]))
+                result[pair] = durs.get(pair, 0.0)
+        return result
 
-            scored.append(
-                {
-                    "members": members,
-                    "cohesion_score": max(0.0, min(1.0, cohesion_score)),
-                    "avg_intra_distance_m": avg_distance,
-                }
-            )
-        return scored
+    def _make_group_detection(self, members, relation_type):
+        lefts   = [p["bbox"].get("left",   0) for p in members]
+        tops    = [p["bbox"].get("top",    0) for p in members]
+        rights  = [p["bbox"].get("left",   0) + p["bbox"].get("width",  0) for p in members]
+        bottoms = [p["bbox"].get("top",    0) + p["bbox"].get("height", 0) for p in members]
 
-    def _filter_by_cohesion_window(self, scored_clusters):
-        stable = []
-        for scored in scored_clusters:
-            members = scored["members"]
-            min_duration = float("inf")
-            for idx_a, idx_b in combinations(range(len(members)), 2):
-                duration = self.state_manager.get_pair_duration(members[idx_a]["id"], members[idx_b]["id"])
-                min_duration = min(min_duration, duration)
+        left   = min(lefts)
+        top    = min(tops)
+        width  = max(rights)  - left
+        height = max(bottoms) - top
 
-            if min_duration >= self.cohesion_window_s or scored["cohesion_score"] >= 0.6:
-                stable.append(scored)
-        return stable
-
-    def _extract_events(self, persons):
-        return self.event_accumulator.process(
-            tracking_history=self.tracking_history,
-            pair_durations=self.pair_durations,
-            persons=persons,
-            cohesion_window_s=self.cohesion_window_s,
+        det = Detection(
+            boundingBox=BoundingBox(left=left, top=top, width=width, height=height),
+            confidence=1.0,
+            classLabel=relation_type,
+            classId=0,
         )
+        det.memberCount = len(members)
+        return det
 
-    def _cluster_pair_events(self, members, events):
-        relevant = {}
-        member_ids = [m["id"] for m in members]
-        for idx_a, idx_b in combinations(range(len(member_ids)), 2):
-            key = tuple(sorted([member_ids[idx_a], member_ids[idx_b]]))
-            if key in events:
-                relevant[key] = events[key]
-        return relevant
-
-    def _classify_groups(self, stable_clusters, events, current_ts):
-        groups = []
-        for scored in stable_clusters:
-            members = scored["members"]
-            member_ids = sorted([m["id"] for m in members])
-            pair_events = self._cluster_pair_events(members, events)
-            relation_type = self.classifier.classify(
-                cluster=members,
-                events=pair_events,
-                config={
-                    "couple_mode": self._resolve_option_value(self.couple_mode),
-                    "family_age_gap": self.family_age_gap,
-                    "min_friend_group_size": self.min_friend_group_size,
-                },
-            )
-
-            group_key = "grp_" + uuid.uuid5(uuid.NAMESPACE_DNS, "|".join(member_ids)).hex[:8]
-            previous = self.active_groups.get(group_key, {})
-            entry_ts = previous.get("entry_timestamp_ms", current_ts)
-            confidence = self.classifier.compute_confidence(
-                cluster=members,
-                pair_events=pair_events,
-                cohesion_score=scored["cohesion_score"],
-            )
-            age_groups = [m["demographics"].get("age_group") for m in members if m["demographics"].get("age_group")]
-            zone_candidates = [m.get("zone_id") for m in members if m.get("zone_id")]
-            zone_id = zone_candidates[0] if zone_candidates else None
-
-            groups.append(
-                {
-                    "group_id": group_key,
-                    "relation_type": relation_type,
-                    "member_ids": member_ids,
-                    "demographic_summary": {"age_groups": age_groups, "size": len(member_ids)},
-                    "avg_intra_distance_m": round(scored["avg_intra_distance_m"], 4),
-                    "cohesion_score": round(scored["cohesion_score"], 4),
-                    "confidence": round(confidence, 4),
-                    "entry_timestamp_ms": int(entry_ts),
-                    "dwell_s": round(max(0.0, (current_ts - entry_ts) / 1000.0), 3),
-                    "zone_id": zone_id,
-                }
-            )
-
-            if relation_type == "family":
-                for parent_id, child_id in self.classifier.extract_parent_child_pairs(members):
-                    groups.append(
-                        {
-                            "group_id": "grp_" + uuid.uuid5(uuid.NAMESPACE_DNS, f"{parent_id}:{child_id}").hex[:8],
-                            "relation_type": "parent:child",
-                            "member_ids": [parent_id, child_id],
-                            "demographic_summary": {"age_groups": ["adult", "child"], "size": 2},
-                            "avg_intra_distance_m": round(scored["avg_intra_distance_m"], 4),
-                            "cohesion_score": round(scored["cohesion_score"], 4),
-                            "confidence": round(min(1.0, confidence + 0.05), 4),
-                            "entry_timestamp_ms": int(entry_ts),
-                            "dwell_s": round(max(0.0, (current_ts - entry_ts) / 1000.0), 3),
-                            "zone_id": zone_id,
-                        }
-                    )
-
-        return groups
-
-    def _identify_solos(self, persons, grouped_ids, unreliable, current_ts):
-        solos = []
-        unreliable_ids = {p["id"] for p in unreliable}
-        for person in persons:
-            pid = person["id"]
-            if pid in grouped_ids:
-                continue
-            confidence = 0.5 if pid in unreliable_ids else max(0.3, person["demographics"].get("demo_confidence", 0.0))
-            solos.append(
-                {
-                    "group_id": "grp_" + uuid.uuid5(uuid.NAMESPACE_DNS, f"solo:{pid}").hex[:8],
-                    "relation_type": "solo_shopper",
-                    "member_ids": [pid],
-                    "demographic_summary": {
-                        "age_groups": [person["demographics"].get("age_group")] if person["demographics"].get("age_group") else [],
-                        "size": 1,
-                    },
-                    "avg_intra_distance_m": 0.0,
-                    "cohesion_score": 0.0,
-                    "confidence": round(float(confidence), 4),
-                    "entry_timestamp_ms": int(current_ts),
-                    "dwell_s": 0.0,
-                    "zone_id": person.get("zone_id"),
-                }
-            )
-        return solos
-
-    def _compute_stats(self, groups, persons, process_start_ms, current_ts):
-        def count_of(rel):
-            return len([g for g in groups if g["relation_type"] == rel])
-
-        return {
-            "family_count": count_of("family"),
-            "couple_count": count_of("couple"),
-            "friend_group_count": count_of("friend_group"),
-            "solo_count": count_of("solo_shopper"),
-            "adult_group_count": count_of("adult_group"),
-            "total_persons": len(persons),
-            "window_start_ms": int(min([p.get("timestamp_ms", process_start_ms) for p in persons], default=process_start_ms)),
-            "window_end_ms": int(current_ts),
-            "meta": {
-                "processed_at_ms": int(process_start_ms),
-                "detection_count": len(persons),
-                "groups_found": len(groups),
-            },
-        }
+    # ─────────────────────────────────────────────────────────
+    # Run
+    # ─────────────────────────────────────────────────────────
 
     def run(self):
-        process_start = int(time.time() * 1000)
-        persons = self._parse_detections()
-        dist_map = self._parse_distances()
-        current_ts = max((p["timestamp_ms"] for p in persons), default=process_start)
-        delta_s = (current_ts - self.last_timestamp_ms) / 1000.0 if self.last_timestamp_ms > 0 else 0.0
+        now  = time.time()
+        last = self.bootstrap.get("last_time") or now
+        dt   = max(0.0, now - last)
+        self.bootstrap["last_time"] = now
 
-        self.state_manager.update_tracking_history(persons=persons, timestamp_ms=current_ts)
-        self.state_manager.update_pair_durations(
-            persons=persons,
-            dist_map=dist_map,
-            delta_s=delta_s,
-            threshold_m=self.group_distance_m,
-        )
-        self.state_manager.cleanup_stale(current_ts=current_ts, max_age_ms=300000)
+        persons = self._build_persons_dict()
+        if not persons:
+            self.groups = []
+            return build_response(context=self)
 
-        reliable = [p for p in persons if p["demographics"]["demo_confidence"] >= self.confidence_threshold]
-        unreliable = [p for p in persons if p["demographics"]["demo_confidence"] < self.confidence_threshold]
+        self._enrich_with_facial(persons)
 
-        clusters = self._cluster_by_distance(reliable, dist_map)
-        scored = self._score_cohesion(clusters, dist_map)
-        stable = self._filter_by_cohesion_window(scored)
-        events = self._extract_events(persons)
-        groups = self._classify_groups(stable, events, current_ts)
+        current_pairs = self._find_proximate_pairs(persons)
+        self._update_durations(current_pairs, dt)
 
-        grouped_ids = set()
-        for group in groups:
-            grouped_ids.update(group["member_ids"])
-        groups.extend(self._identify_solos(persons, grouped_ids, unreliable, current_ts))
+        active_pairs = {p for p, d in self.bootstrap["pair_durations"].items()
+                        if d >= self.prox_dur}
 
-        enabled = [self._resolve_option_value(item) for item in (self.relation_types_enabled or [])]
-        if enabled:
-            groups = [g for g in groups if g["relation_type"] in enabled]
+        groups     = self._build_groups(active_pairs, persons)
+        classifier = Classifier(self)
+        results    = []
 
-        stats = self._compute_stats(groups=groups, persons=persons, process_start_ms=process_start, current_ts=current_ts)
+        for member_keys in groups:
+            if len(member_keys) < 2:
+                continue
+            members    = [persons[k] for k in member_keys]
+            pair_durs  = self._pair_durations_for_group(member_keys)
+            relation   = classifier.classify(members, pair_durs, formation=None)
+            if relation:
+                results.append(self._make_group_detection(members, relation))
 
-        self.bootstrap["tracking_history"] = self.tracking_history
-        self.bootstrap["pair_durations"] = self.pair_durations
-        self.bootstrap["active_groups"] = {g["group_id"]: g for g in groups if g["relation_type"] != "solo_shopper"}
-        self.bootstrap["frame_count"] = self.frame_count + 1
-        self.bootstrap["last_timestamp_ms"] = current_ts
-
-        self.groups_output = groups
-        self.stats_output = stats
-        return build_response_social_group(context=self)
+        self.groups = results
+        return build_response(context=self)
 
 
-if "__main__" == __name__:
+if __name__ == "__main__":
     Executor(sys.argv[1]).run()
