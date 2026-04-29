@@ -576,8 +576,8 @@ class ProximityResponse(Response):
     outputs: ProximityOutputs
 
 
-class ProximityExecutor(Config):
-    name: Literal["Proximity"] = "Proximity"
+class SocialGroup(Config):
+    name: Literal["SocialGroup"] = "SocialGroup"
     value: Union[ProximityRequest, ProximityResponse]
     type: Literal["object"] = "object"
     field: Literal["option"] = "option"
@@ -589,7 +589,7 @@ class ProximityExecutor(Config):
 
 class ConfigExecutor(Config):
     name: Literal["ConfigExecutor"] = "ConfigExecutor"
-    value: Union[ProximityExecutor]
+    value: Union[SocialGroup]
     type: Literal["executor"] = "executor"
     field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
 
