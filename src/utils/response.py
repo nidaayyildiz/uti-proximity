@@ -1,24 +1,15 @@
 from sdks.novavision.src.helper.package import PackageHelper
 from components.Proximity.src.models.PackageModel import (
-    PackageModel,
-    PackageConfigs,
-    ConfigExecutor,
-    SocialGroupExecutor,
-    SocialGroupResponse,
-    SocialGroupOutputs,
-    OutputGroups,
-    OutputStats,
+    PackageModel, PackageConfigs, ConfigExecutor,
+    OutputGroups, ProximityOutputs, ProximityResponse, ProximityExecutor,
 )
 
 
-def build_response_social_group(context):
-    output_groups = OutputGroups(value=context.groups_output)
-    output_stats = OutputStats(value=context.stats_output)
-    outputs = SocialGroupOutputs(outputGroups=output_groups, outputStats=output_stats)
-    response = SocialGroupResponse(outputs=outputs)
-    executor = SocialGroupExecutor(value=response)
-    config_executor = ConfigExecutor(value=executor)
-    package_configs = PackageConfigs(executor=config_executor)
-    package = PackageHelper(packageModel=PackageModel, packageConfigs=package_configs)
-    package_model = package.build_model(context)
-    return package_model
+def build_response(context):
+    output_groups   = OutputGroups(value=context.groups)
+    outputs         = ProximityOutputs(outputGroups=output_groups)
+    response        = ProximityResponse(outputs=outputs)
+    executor        = ConfigExecutor(value=ProximityExecutor(value=response))
+    package_configs = PackageConfigs(executor=executor)
+    package         = PackageHelper(packageModel=PackageModel, packageConfigs=package_configs)
+    return package.build_model(context)
