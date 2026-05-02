@@ -64,9 +64,7 @@ class SocialGroup(Component):
             "last_time": None,
         }
 
-    # ─────────────────────────────────────────────────────────
-    # Person registry helpers
-    # ─────────────────────────────────────────────────────────
+
 
     def _person_key(self, det):
         tid = det.get("trackerID")
@@ -123,9 +121,7 @@ class SocialGroup(Component):
                 p["gender"] = face.get("gender")
             p["height_ratio_to_max"] = max_h / p["h"] if p["h"] > 0 else 1.0
 
-    # ─────────────────────────────────────────────────────────
-    # Proximity pair helpers
-    # ─────────────────────────────────────────────────────────
+
 
     def _find_person_key(self, persons, cx, cy, tol=5):
         """Match a keyPoint coordinate to a person key within tolerance."""
@@ -158,9 +154,7 @@ class SocialGroup(Component):
                 del durs[pair]
         self.bootstrap["pair_durations"] = durs
 
-    # ─────────────────────────────────────────────────────────
-    # Union-Find grouping
-    # ─────────────────────────────────────────────────────────
+
 
     def _build_groups(self, active_pairs, persons):
         """Connected components from active proximity pairs."""
@@ -188,9 +182,7 @@ class SocialGroup(Component):
 
         return list(groups.values())
 
-    # ─────────────────────────────────────────────────────────
-    # Output helpers
-    # ─────────────────────────────────────────────────────────
+
 
     def _pair_durations_for_group(self, member_keys):
         durs = self.bootstrap["pair_durations"]
@@ -222,9 +214,7 @@ class SocialGroup(Component):
         det.memberCount = len(members)
         return det
 
-    # ─────────────────────────────────────────────────────────
-    # Run
-    # ─────────────────────────────────────────────────────────
+
 
     def run(self):
         now  = time.time()
