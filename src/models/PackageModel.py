@@ -49,7 +49,7 @@ class OutputGroups(Output):
 class ProximityInputs(Inputs):
     inputDistances: InputDistances
     inputPersons: InputPersons
-    inputFacialAnalysis: Optional[InputFacialAnalysis] = None
+    inputFacialAnalysis: InputFacialAnalysis
 
 
 class ProximityOutputs(Outputs):
