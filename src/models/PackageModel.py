@@ -412,6 +412,38 @@ class ConfigCoupleGender(Config):
         json_schema_extra = {"shortDescription": "Male+Female Required?"}
 
 
+class CouplePoseEnabled(Config):
+    name: Literal["CouplePoseEnabled"] = "CouplePoseEnabled"
+    value: Literal["enabled"] = "enabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Enabled — Use Keypoints"
+
+
+class CouplePoseDisabled(Config):
+    name: Literal["CouplePoseDisabled"] = "CouplePoseDisabled"
+    value: Literal["disabled"] = "disabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disabled"
+
+
+class ConfigCouplePoseEstimation(Config):
+    """Use COCO 17-keypoint pose estimation signals for couple classification."""
+    name: Literal["configCouplePoseEstimation"] = "configCouplePoseEstimation"
+    value: Union[CouplePoseEnabled, CouplePoseDisabled]
+    type: Literal["object"] = "object"
+    field: Literal["dropdownlist"] = "dropdownlist"
+
+    class Config:
+        title = "Pose Estimation"
+        json_schema_extra = {"shortDescription": "Use Keypoints for Couple?"}
+
+
 class CoupleEnabled(Config):
     name: Literal["CoupleEnabled"] = "CoupleEnabled"
     value: Literal["enabled"] = "enabled"
@@ -420,6 +452,7 @@ class CoupleEnabled(Config):
     configCoupleMinDuration: ConfigCoupleMinDuration
     configCoupleFormation: ConfigCoupleFormation
     configCoupleGender: ConfigCoupleGender
+    configCouplePoseEstimation: ConfigCouplePoseEstimation
 
     class Config:
         title = "Enabled"

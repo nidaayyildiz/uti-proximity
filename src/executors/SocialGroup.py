@@ -47,9 +47,10 @@ class SocialGroup(Component):
         self.pc_hr_value   = self.request.get_param("configPCHRValue")    or 1.4
 
         # Couple
-        self.couple_min_dur  = self.request.get_param("configCoupleMinDuration") or 10.0
-        self.couple_formation = self.request.get_param("configCoupleFormation") or "not_required"
-        self.couple_gender   = self.request.get_param("configCoupleGender")     or "any"
+        self.couple_min_dur      = self.request.get_param("configCoupleMinDuration")    or 10.0
+        self.couple_formation    = self.request.get_param("configCoupleFormation")      or "not_required"
+        self.couple_gender       = self.request.get_param("configCoupleGender")         or "any"
+        self.couple_pose_enabled = self.request.get_param("configCouplePoseEstimation") == "enabled"
 
         # Friend Group
         self.fg_min_size       = self.request.get_param("configFGMinSize")          or 2
@@ -97,6 +98,7 @@ class SocialGroup(Component):
                     "age":        None,
                     "gender":     None,
                     "height_ratio_to_max": 1.0,
+                    "keypoints":  det.get("keyPoints") or [],
                 }
         return persons
 
