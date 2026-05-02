@@ -2,9 +2,9 @@ class Classifier:
     def __init__(self, ctx):
         self.ctx = ctx
 
-    # ─────────────────────────────────────────────────────────
+ 
     # Child detection
-    # ─────────────────────────────────────────────────────────
+  
 
     def _is_child(self, member, child_age, hr_enabled, hr_value):
         age = member.get("age")
@@ -25,9 +25,9 @@ class Classifier:
             "has_female":    any(g in ("woman", "female") for g in genders),
         }
 
-    # ─────────────────────────────────────────────────────────
+
     # Formation detection (side_by_side vs other)
-    # ─────────────────────────────────────────────────────────
+
 
     @staticmethod
     def _is_side_by_side(m1, m2):
@@ -35,15 +35,15 @@ class Classifier:
         avg_h   = (m1["h"] + m2["h"]) / 2.0
         return cy_diff < 0.35 * avg_h
 
-    # ─────────────────────────────────────────────────────────
+
     # Main classify entry point
-    # ─────────────────────────────────────────────────────────
+
 
     def classify(self, members, pair_durations, formation):
         ctx  = self.ctx
         size = len(members)
 
-        # ── FAMILY ───────────────────────────────────────────
+        # FAMILY 
         if ctx.family_enabled:
             p = self._profile(members, ctx.family_child_age,
                               ctx.family_hr_enabled, ctx.family_hr_value)
@@ -56,14 +56,14 @@ class Classifier:
                     p["n_adults"] >= ctx.family_min_adults and gender_ok):
                 return "family"
 
-        # ── PARENT-CHILD ─────────────────────────────────────
+        #  PARENT-CHILD 
         if ctx.pc_enabled:
             p = self._profile(members, ctx.pc_child_age,
                               ctx.pc_hr_enabled, ctx.pc_hr_value)
             if p["n_children"] >= 1 and p["n_adults"] >= 1 and size <= 3:
                 return "parent_child"
 
-        # ── COUPLE ───────────────────────────────────────────
+        #  COUPLE 
         if ctx.couple_enabled and size == 2:
             m1, m2    = members[0], members[1]
             g1        = (m1.get("gender") or "").lower()
@@ -82,7 +82,7 @@ class Classifier:
             if dur >= ctx.couple_min_dur and gender_ok and form_ok:
                 return "couple"
 
-        # ── FRIEND GROUP ─────────────────────────────────────
+        #  FRIEND GROUP 
         if ctx.fg_enabled and size >= ctx.fg_min_size:
             heights   = [m["h"] for m in members]
             min_h     = min(heights) or 1
