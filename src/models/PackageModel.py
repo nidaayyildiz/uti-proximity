@@ -24,7 +24,7 @@ class InputPersons(Input):
     type: str = "list"
 
     class Config:
-        title = "Persons"
+        title = "Persons (Pose Estimation)"
 
 
 class InputFacialAnalysis(Input):
@@ -34,7 +34,7 @@ class InputFacialAnalysis(Input):
     type: str = "list"
 
     class Config:
-        title = "Facial Analysis (Optional)"
+        title = "Facial Analysis"
 
 
 class OutputGroups(Output):
