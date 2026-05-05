@@ -2,7 +2,7 @@ from pydantic import Field
 from typing import List, Union, Literal, Optional
 from sdks.novavision.src.base.model import (
     Package, Input, Output, Config,
-    Inputs, Configs, Outputs, Response, Request, Detection,
+    Inputs, Configs, Outputs, Response, Request, Detection,BoundingBox,
 )
 
 
