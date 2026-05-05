@@ -38,6 +38,7 @@ class InputFacialAnalysis(Input):
 
 
 class OutputGroups(Output):
+    """Detected social groups emitted by Proximity — each Detection represents one group."""
     name: Literal["outputGroups"] = "outputGroups"
     value: List[Detection]
     type: Literal["list"] = "list"
@@ -47,12 +48,14 @@ class OutputGroups(Output):
 
 
 class ProximityInputs(Inputs):
+    """Aggregates all input channels required by the Proximity component."""
     inputDistances: InputDistances
     inputPersons: InputPersons
     inputFacialAnalysis: InputFacialAnalysis
 
 
 class ProximityOutputs(Outputs):
+    """Aggregates all output channels produced by the Proximity component."""
     outputGroups: OutputGroups
 
 
@@ -83,6 +86,7 @@ class ConfigProximityDurationSec(Config):
 
 
 class GenderMaleFemale(Config):
+    """Option: accept both male and female adults in the group."""
     name: Literal["GenderMaleFemale"] = "GenderMaleFemale"
     value: Literal["both"] = "both"
     type: Literal["string"] = "string"
@@ -93,6 +97,7 @@ class GenderMaleFemale(Config):
 
 
 class GenderMale(Config):
+    """Option: accept only male adults in the group."""
     name: Literal["GenderMale"] = "GenderMale"
     value: Literal["male"] = "male"
     type: Literal["string"] = "string"
@@ -103,6 +108,7 @@ class GenderMale(Config):
 
 
 class GenderFemale(Config):
+    """Option: accept only female adults in the group."""
     name: Literal["GenderFemale"] = "GenderFemale"
     value: Literal["female"] = "female"
     type: Literal["string"] = "string"
@@ -174,6 +180,7 @@ class ConfigFamilyHRValue(Config):
 
 
 class FamilyHREnabled(Config):
+    """Option: enable height-ratio child detection with configFamilyHRValue sub-config."""
     name: Literal["FamilyHREnabled"] = "FamilyHREnabled"
     value: Literal["enabled"] = "enabled"
     type: Literal["string"] = "string"
@@ -185,6 +192,7 @@ class FamilyHREnabled(Config):
 
 
 class FamilyHRDisabled(Config):
+    """Option: disable height-ratio child detection fallback."""
     name: Literal["FamilyHRDisabled"] = "FamilyHRDisabled"
     value: Literal["disabled"] = "disabled"
     type: Literal["string"] = "string"
@@ -207,6 +215,7 @@ class ConfigFamilyHeightRatio(Config):
 
 
 class FamilyEnabled(Config):
+    """Option: enable Family classification with all its sub-configs."""
     name: Literal["FamilyEnabled"] = "FamilyEnabled"
     value: Literal["enabled"] = "enabled"
     type: Literal["string"] = "string"
@@ -222,6 +231,7 @@ class FamilyEnabled(Config):
 
 
 class FamilyDisabled(Config):
+    """Option: disable Family group classification entirely."""
     name: Literal["FamilyDisabled"] = "FamilyDisabled"
     value: Literal["disabled"] = "disabled"
     type: Literal["string"] = "string"
@@ -269,6 +279,7 @@ class ConfigPCHRValue(Config):
 
 
 class PCHREnabled(Config):
+    """Option: enable height-ratio fallback for Parent-Child child detection."""
     name: Literal["PCHREnabled"] = "PCHREnabled"
     value: Literal["enabled"] = "enabled"
     type: Literal["string"] = "string"
@@ -280,6 +291,7 @@ class PCHREnabled(Config):
 
 
 class PCHRDisabled(Config):
+    """Option: disable height-ratio fallback for Parent-Child classification."""
     name: Literal["PCHRDisabled"] = "PCHRDisabled"
     value: Literal["disabled"] = "disabled"
     type: Literal["string"] = "string"
@@ -302,6 +314,7 @@ class ConfigPCHeightRatio(Config):
 
 
 class ParentChildEnabled(Config):
+    """Option: enable Parent-Child classification with all its sub-configs."""
     name: Literal["ParentChildEnabled"] = "ParentChildEnabled"
     value: Literal["enabled"] = "enabled"
     type: Literal["string"] = "string"
@@ -314,6 +327,7 @@ class ParentChildEnabled(Config):
 
 
 class ParentChildDisabled(Config):
+    """Option: disable Parent-Child classification entirely."""
     name: Literal["ParentChildDisabled"] = "ParentChildDisabled"
     value: Literal["disabled"] = "disabled"
     type: Literal["string"] = "string"
@@ -349,6 +363,7 @@ class ConfigCoupleMinDuration(Config):
 
 
 class FormationRequired(Config):
+    """Option: require side-by-side spatial formation for couple classification."""
     name: Literal["FormationRequired"] = "FormationRequired"
     value: Literal["required"] = "required"
     type: Literal["string"] = "string"
@@ -359,6 +374,7 @@ class FormationRequired(Config):
 
 
 class FormationNotRequired(Config):
+    """Option: allow any spatial formation for couple classification."""
     name: Literal["FormationNotRequired"] = "FormationNotRequired"
     value: Literal["not_required"] = "not_required"
     type: Literal["string"] = "string"
@@ -381,6 +397,7 @@ class ConfigCoupleFormation(Config):
 
 
 class CoupleGenderRequired(Config):
+    """Option: require one male and one female for couple classification."""
     name: Literal["CoupleGenderRequired"] = "CoupleGenderRequired"
     value: Literal["required"] = "required"
     type: Literal["string"] = "string"
@@ -391,6 +408,7 @@ class CoupleGenderRequired(Config):
 
 
 class CoupleGenderAny(Config):
+    """Option: allow any gender combination for couple classification."""
     name: Literal["CoupleGenderAny"] = "CoupleGenderAny"
     value: Literal["any"] = "any"
     type: Literal["string"] = "string"
@@ -413,6 +431,7 @@ class ConfigCoupleGender(Config):
 
 
 class CouplePoseEnabled(Config):
+    """Option: use COCO 17-keypoint data for pose-based couple analysis."""
     name: Literal["CouplePoseEnabled"] = "CouplePoseEnabled"
     value: Literal["enabled"] = "enabled"
     type: Literal["string"] = "string"
@@ -423,6 +442,7 @@ class CouplePoseEnabled(Config):
 
 
 class CouplePoseDisabled(Config):
+    """Option: skip pose estimation during couple classification."""
     name: Literal["CouplePoseDisabled"] = "CouplePoseDisabled"
     value: Literal["disabled"] = "disabled"
     type: Literal["string"] = "string"
@@ -445,6 +465,7 @@ class ConfigCouplePoseEstimation(Config):
 
 
 class CoupleEnabled(Config):
+    """Option: enable Couple classification with all its sub-configs."""
     name: Literal["CoupleEnabled"] = "CoupleEnabled"
     value: Literal["enabled"] = "enabled"
     type: Literal["string"] = "string"
@@ -459,6 +480,7 @@ class CoupleEnabled(Config):
 
 
 class CoupleDisabled(Config):
+    """Option: disable Couple classification entirely."""
     name: Literal["CoupleDisabled"] = "CoupleDisabled"
     value: Literal["disabled"] = "disabled"
     type: Literal["string"] = "string"
@@ -553,6 +575,7 @@ class ConfigFGChildTolerance(Config):
 
 
 class FriendGroupEnabled(Config):
+    """Option: enable Friend Group classification with all its sub-configs."""
     name: Literal["FriendGroupEnabled"] = "FriendGroupEnabled"
     value: Literal["enabled"] = "enabled"
     type: Literal["string"] = "string"
@@ -566,6 +589,7 @@ class FriendGroupEnabled(Config):
 
 
 class FriendGroupDisabled(Config):
+    """Option: disable Friend Group classification entirely."""
     name: Literal["FriendGroupDisabled"] = "FriendGroupDisabled"
     value: Literal["disabled"] = "disabled"
     type: Literal["string"] = "string"
@@ -589,6 +613,7 @@ class ConfigFriendGroupDetection(Config):
 
 
 class ProximityConfigs(Configs):
+    """Aggregates all top-level configuration fields for the Proximity component."""
     configProximityThresholdCm: ConfigProximityThresholdCm
     configProximityDurationSec: ConfigProximityDurationSec
     configFamilyDetection: ConfigFamilyDetection
@@ -598,6 +623,7 @@ class ProximityConfigs(Configs):
 
 
 class ProximityRequest(Request):
+    """Full request schema for Proximity: optional inputs combined with required configs."""
     inputs: Optional[ProximityInputs] = None
     configs: ProximityConfigs
 
@@ -606,10 +632,12 @@ class ProximityRequest(Request):
 
 
 class ProximityResponse(Response):
+    """Response schema for Proximity containing the detected social group outputs."""
     outputs: ProximityOutputs
 
 
 class SocialGroupExecutor(Config):
+    """Executor option that bundles ProximityRequest and ProximityResponse under the SocialGroup task."""
     name: Literal["SocialGroup"] = "SocialGroup"
     value: Union[ProximityRequest, ProximityResponse]
     type: Literal["object"] = "object"
@@ -621,6 +649,7 @@ class SocialGroupExecutor(Config):
 
 
 class ConfigExecutor(Config):
+    """Top-level task selector; wraps the chosen executor variant (e.g. SocialGroup)."""
     name: Literal["ConfigExecutor"] = "ConfigExecutor"
     value: Union[SocialGroupExecutor]
     type: Literal["executor"] = "executor"
@@ -632,10 +661,12 @@ class ConfigExecutor(Config):
 
 
 class PackageConfigs(Configs):
+    """Top-level config container for the Proximity package — holds the executor selector."""
     executor: ConfigExecutor
 
 
 class PackageModel(Package):
+    """Root package descriptor for the Proximity component."""
     configs: PackageConfigs
     type: Literal["component"] = "component"
     name: Literal["Proximity"] = "Proximity"
