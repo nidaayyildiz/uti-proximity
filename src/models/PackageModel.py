@@ -63,7 +63,7 @@ class ProximityOutputs(Outputs):
 class ConfigProximityThresholdCm(Config):
     """Maximum distance (cm) between two persons to be considered proximate."""
     name: Literal["configProximityThresholdCm"] = "configProximityThresholdCm"
-    value: float = Field(default=150.0, ge=1.0, le=10000.0)
+    value: float = Field(default=150.0, ge=0.0, le=10000.0)
     type: Literal["number"] = "number"
     field: Literal["textInput"] = "textInput"
 
