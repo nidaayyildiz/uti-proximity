@@ -24,8 +24,8 @@ class SocialGroup(Component):
             self.facial = []
 
         # General
-        self.prox_cm  = self.request.get_param("configProximityThresholdCm") or 150.0
-        self.prox_dur = self.request.get_param("configProximityDurationSec") or 3.0
+        self.prox_cm  = self.request.get_param("configProximityThresholdCm") 
+        self.prox_dur = self.request.get_param("configProximityDurationSec") 
 
         # Classification flags
         self.family_enabled = self.request.get_param("configFamilyDetection")       == "enabled"
