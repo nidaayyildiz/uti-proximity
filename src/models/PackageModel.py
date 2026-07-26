@@ -1,150 +1,672 @@
+from pydantic import Field
+from typing import List, Union, Literal, Optional
+from sdks.novavision.src.base.model import (
+    Package, Input, Output, Config,
+    Inputs, Configs, Outputs, Response, Request, Detection,BoundingBox,
+)
 
-from pydantic import Field, validator
-from typing import List, Optional, Union, Literal
-from sdks.novavision.src.base.model import Package, Image, Inputs, Configs, Outputs, Response, Request, Output, Input, Config
 
 
-class InputImage(Input):
-    name: Literal["inputImage"] = "inputImage"
-    value: Union[List[Image], Image]
-    type: str = "object"
-
-    @validator("type", pre=True, always=True)
-    def set_type_based_on_value(cls, value, values):
-        value = values.get('value')
-        if isinstance(value, Image):
-            return "object"
-        elif isinstance(value, list):
-            return "list"
+class InputDistances(Input):
+    """outputDistance from MeasureDistance — pairwise distance detections."""
+    name: Literal["inputDistances"] = "inputDistances"
+    value: List[Detection]
+    type: str = "list"
 
     class Config:
-        title = "Image"
+        title = "Distance Pairs"
 
 
-class OutputImage(Output):
-    name: Literal["outputImage"] = "outputImage"
-    value: Union[List[Image],Image]
-    type: str = "object"
-
-    @validator("type", pre=True, always=True)
-    def set_type_based_on_value(cls, value, values):
-        value = values.get('value')
-        if isinstance(value, Image):
-            return "object"
-        elif isinstance(value, list):
-            return "list"
+class InputPersons(Input):
+    """outputObjects from MeasureDistance — individual person detections (with trackerID if tracked)."""
+    name: Literal["inputPersons"] = "inputPersons"
+    value: List[Detection]
+    type: str = "list"
 
     class Config:
-        title = "Image"
+        title = "Persons (Pose Estimation)"
 
 
-class KeepSideFalse(Config):
-    name: Literal["False"] = "False"
-    value: Literal[False] = False
-    type: Literal["bool"] = "bool"
+class InputFacialAnalysis(Input):
+    """outputDetections from FacialAnalysis — persons enriched with age and gender."""
+    name: Literal["inputFacialAnalysis"] = "inputFacialAnalysis"
+    value: List[Detection]
+    type: str = "list"
+
+    class Config:
+        title = "Facial Analysis"
+
+
+class OutputGroups(Output):
+    """Detected social groups emitted by Proximity — each Detection represents one group."""
+    name: Literal["outputGroups"] = "outputGroups"
+    value: List[Detection]
+    type: Literal["list"] = "list"
+
+    class Config:
+        title = "Social Groups"
+
+
+class ProximityInputs(Inputs):
+    """Aggregates all input channels required by the Proximity component."""
+    inputDistances: InputDistances
+    inputPersons: InputPersons
+    inputFacialAnalysis: InputFacialAnalysis
+
+
+class ProximityOutputs(Outputs):
+    """Aggregates all output channels produced by the Proximity component."""
+    outputGroups: OutputGroups
+
+
+
+class ConfigProximityThresholdCm(Config):
+    """Maximum distance (cm) between two persons to be considered proximate."""
+    name: Literal["configProximityThresholdCm"] = "configProximityThresholdCm"
+    value: float = Field(default=150.0, ge=0.0, le=10000.0)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Proximity Distance Threshold (cm)"
+        json_schema_extra = {"shortDescription": "Max Distance (cm)"}
+
+
+class ConfigProximityDurationSec(Config):
+    """Minimum seconds a pair must stay within threshold to form a stable group."""
+    name: Literal["configProximityDurationSec"] = "configProximityDurationSec"
+    value: float = Field(default=3.0, ge=0.0, le=3600.0)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Proximity Duration Threshold (sec)"
+        json_schema_extra = {"shortDescription": "Min Duration (sec)"}
+
+
+
+class GenderMaleFemale(Config):
+    """Option: accept both male and female adults in the group."""
+    name: Literal["GenderMaleFemale"] = "GenderMaleFemale"
+    value: Literal["both"] = "both"
+    type: Literal["string"] = "string"
     field: Literal["option"] = "option"
 
     class Config:
-        title = "Disable"
+        title = "Male + Female"
 
 
-class KeepSideTrue(Config):
-    name: Literal["True"] = "True"
-    value: Literal[True] = True
-    type: Literal["bool"] = "bool"
+class GenderMale(Config):
+    """Option: accept only male adults in the group."""
+    name: Literal["GenderMale"] = "GenderMale"
+    value: Literal["male"] = "male"
+    type: Literal["string"] = "string"
     field: Literal["option"] = "option"
 
     class Config:
-        title = "Enable"
+        title = "Male"
 
 
-class KeepSideBBox(Config):
-    """
-        Rotate image without catting off sides.
-    """
-    name: Literal["KeepSide"] = "KeepSide"
-    value: Union[KeepSideTrue, KeepSideFalse]
+class GenderFemale(Config):
+    """Option: accept only female adults in the group."""
+    name: Literal["GenderFemale"] = "GenderFemale"
+    value: Literal["female"] = "female"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Female"
+
+
+
+class ConfigFamilyMinChildren(Config):
+    """Minimum number of children required for Family classification."""
+    name: Literal["configFamilyMinChildren"] = "configFamilyMinChildren"
+    value: int = Field(default=1, ge=1, le=10)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Minimum Children Count"
+        json_schema_extra = {"shortDescription": "Min. Children"}
+
+
+class ConfigFamilyMinAdults(Config):
+    """Minimum number of adults required for Family classification."""
+    name: Literal["configFamilyMinAdults"] = "configFamilyMinAdults"
+    value: int = Field(default=2, ge=1, le=10)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Minimum Adults Count"
+        json_schema_extra = {"shortDescription": "Min. Adults"}
+
+
+class ConfigFamilyAdultGender(Config):
+    """Required adult gender combination for Family classification."""
+    name: Literal["configFamilyAdultGender"] = "configFamilyAdultGender"
+    value: Union[GenderMaleFemale, GenderMale, GenderFemale]
     type: Literal["object"] = "object"
     field: Literal["dropdownlist"] = "dropdownlist"
 
     class Config:
-        title = "Keep Sides"
+        title = "Required Adult Genders"
+        json_schema_extra = {"shortDescription": "Gender Combination"}
 
 
-class Degree(Config):
-    """
-        Positive angles specify counterclockwise rotation while negative angles indicate clockwise rotation.
-    """
-    name: Literal["Degree"] = "Degree"
-    value: int = Field(ge=-359.0, le=359.0,default=0)
+class ConfigFamilyChildAge(Config):
+    """Age threshold: persons younger than this are classified as children (Family)."""
+    name: Literal["configFamilyChildAge"] = "configFamilyChildAge"
+    value: int = Field(default=18, ge=1, le=100)
     type: Literal["number"] = "number"
     field: Literal["textInput"] = "textInput"
-    placeHolder: Literal["[-359, 359]"] = "[-359, 359]"
 
     class Config:
-        title = "Angle"
+        title = "Child Age Threshold"
+        json_schema_extra = {"shortDescription": "Age < X → Child"}
 
 
-class PackageInputs(Inputs):
-    inputImage: InputImage
-
-
-class PackageConfigs(Configs):
-    degree: Degree
-    drawBBox: KeepSideBBox
-
-
-class PackageOutputs(Outputs):
-    outputImage: OutputImage
-
-
-class PackageRequest(Request):
-    inputs: Optional[PackageInputs]
-    configs: PackageConfigs
+class ConfigFamilyHRValue(Config):
+    """Bbox height ratio (max_height / person_height) above which a person is a child."""
+    name: Literal["configFamilyHRValue"] = "configFamilyHRValue"
+    value: float = Field(default=1.4, ge=1.0, le=5.0)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
 
     class Config:
-        json_schema_extra = {
-            "target": "configs"
-        }
+        title = "Height Ratio Value"
+        json_schema_extra = {"shortDescription": "Ratio Threshold (e.g. 1.4)"}
 
 
-class PackageResponse(Response):
-    outputs: PackageOutputs
+class FamilyHREnabled(Config):
+    """Option: enable height-ratio child detection with configFamilyHRValue sub-config."""
+    name: Literal["FamilyHREnabled"] = "FamilyHREnabled"
+    value: Literal["enabled"] = "enabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+    configFamilyHRValue: ConfigFamilyHRValue
+
+    class Config:
+        title = "Enabled"
 
 
-class PackageExecutor(Config):
-    name: Literal["Package"] = "Package"
-    value: Union[PackageRequest, PackageResponse]
+class FamilyHRDisabled(Config):
+    """Option: disable height-ratio child detection fallback."""
+    name: Literal["FamilyHRDisabled"] = "FamilyHRDisabled"
+    value: Literal["disabled"] = "disabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disabled"
+
+
+class ConfigFamilyHeightRatio(Config):
+    """Fallback child detection using bbox height ratio when age data is unavailable."""
+    name: Literal["configFamilyHeightRatio"] = "configFamilyHeightRatio"
+    value: Union[FamilyHREnabled, FamilyHRDisabled]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    class Config:
+        title = "Child Height Ratio (Fallback)"
+        json_schema_extra = {"shortDescription": "Bbox Height Fallback"}
+
+
+class FamilyEnabled(Config):
+    """Option: enable Family classification with all its sub-configs."""
+    name: Literal["FamilyEnabled"] = "FamilyEnabled"
+    value: Literal["enabled"] = "enabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+    configFamilyMinChildren: ConfigFamilyMinChildren
+    configFamilyMinAdults: ConfigFamilyMinAdults
+    configFamilyAdultGender: ConfigFamilyAdultGender
+    configFamilyChildAge: ConfigFamilyChildAge
+    configFamilyHeightRatio: ConfigFamilyHeightRatio
+
+    class Config:
+        title = "Enabled"
+
+
+class FamilyDisabled(Config):
+    """Option: disable Family group classification entirely."""
+    name: Literal["FamilyDisabled"] = "FamilyDisabled"
+    value: Literal["disabled"] = "disabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disabled"
+
+
+class ConfigFamilyDetection(Config):
+    """Enable or disable Family group classification."""
+    name: Literal["configFamilyDetection"] = "configFamilyDetection"
+    value: Union[FamilyEnabled, FamilyDisabled]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    class Config:
+        title = "Family Detection"
+        json_schema_extra = {"shortDescription": "Classify Family Groups"}
+
+
+
+class ConfigPCChildAge(Config):
+    """Age threshold: persons younger than this are classified as children (Parent-Child)."""
+    name: Literal["configPCChildAge"] = "configPCChildAge"
+    value: int = Field(default=18, ge=1, le=100)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Child Age Threshold"
+        json_schema_extra = {"shortDescription": "Age < X → Child"}
+
+
+class ConfigPCHRValue(Config):
+    """Bbox height ratio threshold for child detection fallback (Parent-Child)."""
+    name: Literal["configPCHRValue"] = "configPCHRValue"
+    value: float = Field(default=1.4, ge=1.0, le=5.0)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Height Ratio Value"
+        json_schema_extra = {"shortDescription": "Ratio Threshold (e.g. 1.4)"}
+
+
+class PCHREnabled(Config):
+    """Option: enable height-ratio fallback for Parent-Child child detection."""
+    name: Literal["PCHREnabled"] = "PCHREnabled"
+    value: Literal["enabled"] = "enabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+    configPCHRValue: ConfigPCHRValue
+
+    class Config:
+        title = "Enabled"
+
+
+class PCHRDisabled(Config):
+    """Option: disable height-ratio fallback for Parent-Child classification."""
+    name: Literal["PCHRDisabled"] = "PCHRDisabled"
+    value: Literal["disabled"] = "disabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disabled"
+
+
+class ConfigPCHeightRatio(Config):
+    """Fallback child detection using bbox height ratio when age data is unavailable."""
+    name: Literal["configPCHeightRatio"] = "configPCHeightRatio"
+    value: Union[PCHREnabled, PCHRDisabled]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    class Config:
+        title = "Child Height Ratio (Fallback)"
+        json_schema_extra = {"shortDescription": "Bbox Height Fallback"}
+
+
+class ParentChildEnabled(Config):
+    """Option: enable Parent-Child classification with all its sub-configs."""
+    name: Literal["ParentChildEnabled"] = "ParentChildEnabled"
+    value: Literal["enabled"] = "enabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+    configPCChildAge: ConfigPCChildAge
+    configPCHeightRatio: ConfigPCHeightRatio
+
+    class Config:
+        title = "Enabled"
+
+
+class ParentChildDisabled(Config):
+    """Option: disable Parent-Child classification entirely."""
+    name: Literal["ParentChildDisabled"] = "ParentChildDisabled"
+    value: Literal["disabled"] = "disabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disabled"
+
+
+class ConfigParentChildDetection(Config):
+    """Enable or disable Parent-Child group classification."""
+    name: Literal["configParentChildDetection"] = "configParentChildDetection"
+    value: Union[ParentChildEnabled, ParentChildDisabled]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    class Config:
+        title = "Parent-Child Detection"
+        json_schema_extra = {"shortDescription": "Classify Parent-Child Pairs"}
+
+
+
+class ConfigCoupleMinDuration(Config):
+    """Minimum seconds a pair must be proximate to be classified as a couple."""
+    name: Literal["configCoupleMinDuration"] = "configCoupleMinDuration"
+    value: float = Field(default=10.0, ge=0.0, le=3600.0)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Minimum Duration (sec)"
+        json_schema_extra = {"shortDescription": "Min. Together Time"}
+
+
+class FormationRequired(Config):
+    """Option: require side-by-side spatial formation for couple classification."""
+    name: Literal["FormationRequired"] = "FormationRequired"
+    value: Literal["required"] = "required"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Yes — Side by Side Only"
+
+
+class FormationNotRequired(Config):
+    """Option: allow any spatial formation for couple classification."""
+    name: Literal["FormationNotRequired"] = "FormationNotRequired"
+    value: Literal["not_required"] = "not_required"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "No — Any Formation"
+
+
+class ConfigCoupleFormation(Config):
+    """Whether side-by-side formation is required for couple classification."""
+    name: Literal["configCoupleFormation"] = "configCoupleFormation"
+    value: Union[FormationRequired, FormationNotRequired]
+    type: Literal["object"] = "object"
+    field: Literal["dropdownlist"] = "dropdownlist"
+
+    class Config:
+        title = "Formation Requirement"
+        json_schema_extra = {"shortDescription": "Side-by-Side Required?"}
+
+
+class CoupleGenderRequired(Config):
+    """Option: require one male and one female for couple classification."""
+    name: Literal["CoupleGenderRequired"] = "CoupleGenderRequired"
+    value: Literal["required"] = "required"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Male + Female Required"
+
+
+class CoupleGenderAny(Config):
+    """Option: allow any gender combination for couple classification."""
+    name: Literal["CoupleGenderAny"] = "CoupleGenderAny"
+    value: Literal["any"] = "any"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Any Gender"
+
+
+class ConfigCoupleGender(Config):
+    """Gender condition for couple classification."""
+    name: Literal["configCoupleGender"] = "configCoupleGender"
+    value: Union[CoupleGenderRequired, CoupleGenderAny]
+    type: Literal["object"] = "object"
+    field: Literal["dropdownlist"] = "dropdownlist"
+
+    class Config:
+        title = "Gender Condition"
+        json_schema_extra = {"shortDescription": "Male+Female Required?"}
+
+
+class CouplePoseEnabled(Config):
+    """Option: use COCO 17-keypoint data for pose-based couple analysis."""
+    name: Literal["CouplePoseEnabled"] = "CouplePoseEnabled"
+    value: Literal["enabled"] = "enabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Enabled — Use Keypoints"
+
+
+class CouplePoseDisabled(Config):
+    """Option: skip pose estimation during couple classification."""
+    name: Literal["CouplePoseDisabled"] = "CouplePoseDisabled"
+    value: Literal["disabled"] = "disabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disabled"
+
+
+class ConfigCouplePoseEstimation(Config):
+    """Use COCO 17-keypoint pose estimation signals for couple classification."""
+    name: Literal["configCouplePoseEstimation"] = "configCouplePoseEstimation"
+    value: Union[CouplePoseEnabled, CouplePoseDisabled]
+    type: Literal["object"] = "object"
+    field: Literal["dropdownlist"] = "dropdownlist"
+
+    class Config:
+        title = "Pose Estimation"
+        json_schema_extra = {"shortDescription": "Use Keypoints for Couple?"}
+
+
+class CoupleEnabled(Config):
+    """Option: enable Couple classification with all its sub-configs."""
+    name: Literal["CoupleEnabled"] = "CoupleEnabled"
+    value: Literal["enabled"] = "enabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+    configCoupleMinDuration: ConfigCoupleMinDuration
+    configCoupleFormation: ConfigCoupleFormation
+    configCoupleGender: ConfigCoupleGender
+    configCouplePoseEstimation: ConfigCouplePoseEstimation
+
+    class Config:
+        title = "Enabled"
+
+
+class CoupleDisabled(Config):
+    """Option: disable Couple classification entirely."""
+    name: Literal["CoupleDisabled"] = "CoupleDisabled"
+    value: Literal["disabled"] = "disabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disabled"
+
+
+class ConfigCoupleDetection(Config):
+    """Enable or disable Couple classification."""
+    name: Literal["configCoupleDetection"] = "configCoupleDetection"
+    value: Union[CoupleEnabled, CoupleDisabled]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    class Config:
+        title = "Couple Detection"
+        json_schema_extra = {"shortDescription": "Classify Couples"}
+
+
+
+class ConfigFGMinSize(Config):
+    """Minimum number of members to classify as a Friend Group."""
+    name: Literal["configFGMinSize"] = "configFGMinSize"
+    value: int = Field(default=2, ge=2, le=20)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Minimum Group Size"
+        json_schema_extra = {"shortDescription": "Min. Members"}
+
+
+class ConfigFGHeightTolerance(Config):
+    """Max allowed bbox height ratio (tallest/shortest) within a friend group."""
+    name: Literal["configFGHeightTolerance"] = "configFGHeightTolerance"
+    value: float = Field(default=1.3, ge=1.0, le=5.0)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Height Tolerance Ratio"
+        json_schema_extra = {"shortDescription": "Max Height Ratio (e.g. 1.3)"}
+
+
+class ConfigFGChildAge(Config):
+    """Age below which a person is considered a child for Friend Group child-skip logic."""
+    name: Literal["configFGChildAge"] = "configFGChildAge"
+    value: int = Field(default=18, ge=1, le=100)
+    type: Literal["number"] = "number"
+    field: Literal["textInput"] = "textInput"
+
+    class Config:
+        title = "Child Age Threshold"
+        json_schema_extra = {"shortDescription": "Age < X → Child (skips group)"}
+
+
+class FGChildSkip(Config):
+    """Skip Friend Group classification if a child is detected in the group."""
+    name: Literal["FGChildSkip"] = "FGChildSkip"
+    value: Literal["skip"] = "skip"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+    configFGChildAge: ConfigFGChildAge
+
+    class Config:
+        title = "Skip If Child Present"
+
+
+class FGChildAllow(Config):
+    """Allow children in Friend Group — do not skip classification."""
+    name: Literal["FGChildAllow"] = "FGChildAllow"
+    value: Literal["allow"] = "allow"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Allow Children"
+
+
+class ConfigFGChildTolerance(Config):
+    """Whether to skip Friend Group classification when a child is present."""
+    name: Literal["configFGChildTolerance"] = "configFGChildTolerance"
+    value: Union[FGChildSkip, FGChildAllow]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    class Config:
+        title = "Child Tolerance"
+        json_schema_extra = {"shortDescription": "Behavior When Child Found"}
+
+
+class FriendGroupEnabled(Config):
+    """Option: enable Friend Group classification with all its sub-configs."""
+    name: Literal["FriendGroupEnabled"] = "FriendGroupEnabled"
+    value: Literal["enabled"] = "enabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+    configFGMinSize: ConfigFGMinSize
+    configFGHeightTolerance: ConfigFGHeightTolerance
+    configFGChildTolerance: ConfigFGChildTolerance
+
+    class Config:
+        title = "Enabled"
+
+
+class FriendGroupDisabled(Config):
+    """Option: disable Friend Group classification entirely."""
+    name: Literal["FriendGroupDisabled"] = "FriendGroupDisabled"
+    value: Literal["disabled"] = "disabled"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disabled"
+
+
+class ConfigFriendGroupDetection(Config):
+    """Enable or disable Friend Group classification."""
+    name: Literal["configFriendGroupDetection"] = "configFriendGroupDetection"
+    value: Union[FriendGroupEnabled, FriendGroupDisabled]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    class Config:
+        title = "Friend Group Detection"
+        json_schema_extra = {"shortDescription": "Classify Friend Groups"}
+
+
+
+class ProximityConfigs(Configs):
+    """Aggregates all top-level configuration fields for the Proximity component."""
+    configProximityThresholdCm: ConfigProximityThresholdCm
+    configProximityDurationSec: ConfigProximityDurationSec
+    configFamilyDetection: ConfigFamilyDetection
+    configParentChildDetection: ConfigParentChildDetection
+    configCoupleDetection: ConfigCoupleDetection
+    configFriendGroupDetection: ConfigFriendGroupDetection
+
+
+class ProximityRequest(Request):
+    """Full request schema for Proximity: optional inputs combined with required configs."""
+    inputs: Optional[ProximityInputs] = None
+    configs: ProximityConfigs
+
+    class Config:
+        json_schema_extra = {"target": "configs"}
+
+
+class ProximityResponse(Response):
+    """Response schema for Proximity containing the detected social group outputs."""
+    outputs: ProximityOutputs
+
+
+class SocialGroupExecutor(Config):
+    """Executor option that bundles ProximityRequest and ProximityResponse under the SocialGroup task."""
+    name: Literal["SocialGroup"] = "SocialGroup"
+    value: Union[ProximityRequest, ProximityResponse]
     type: Literal["object"] = "object"
     field: Literal["option"] = "option"
 
     class Config:
-        title = "Package"
-        json_schema_extra = {
-            "target": {
-                "value": 0
-            }
-        }
+        title = "Proximity"
+        json_schema_extra = {"target": {"value": 0}}
 
 
 class ConfigExecutor(Config):
+    """Top-level task selector; wraps the chosen executor variant (e.g. SocialGroup)."""
     name: Literal["ConfigExecutor"] = "ConfigExecutor"
-    value: Union[PackageExecutor]
+    value: Union[SocialGroupExecutor]
     type: Literal["executor"] = "executor"
     field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
 
     class Config:
         title = "Task"
-        json_schema_extra = {
-            "target": "value"
-        }
+        json_schema_extra = {"target": "value"}
 
 
 class PackageConfigs(Configs):
+    """Top-level config container for the Proximity package — holds the executor selector."""
     executor: ConfigExecutor
 
 
 class PackageModel(Package):
+    """Root package descriptor for the Proximity component."""
     configs: PackageConfigs
     type: Literal["component"] = "component"
-    name: Literal["Package"] = "Package"
+    name: Literal["Proximity"] = "Proximity"
